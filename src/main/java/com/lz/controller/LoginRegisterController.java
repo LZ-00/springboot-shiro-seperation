@@ -12,10 +12,8 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
 
 import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpSession;
 
 /**
  * @author 乐。
@@ -43,7 +41,7 @@ public class LoginRegisterController {
      * 跳转到登录界面
      * @return
      */
-    @GetMapping("/login")
+    @GetMapping("/toLogin")
     String toLogin(HttpServletRequest request,Model model){
         if (SecurityUtils.getSubject().isAuthenticated()) {
             return "redirect:/index";
@@ -57,19 +55,17 @@ public class LoginRegisterController {
     }
 
     @PostMapping("/login")
-    String login(String username, String password, Boolean rememberMe
-            , Model model
-            , HttpSession session, HttpServletRequest request){
-        log.info("invoke======>login(post)");
-        System.out.println("invoke======>login(post)");
-        rememberMe = rememberMe==null ? false : true;
-        UsernamePasswordToken usernamePasswordToken = new UsernamePasswordToken(username, password,rememberMe);
+    String login(String username, String password,Model model
+            ,HttpServletRequest request){
+
+        String authorization = request.getHeader("authorization");
+        System.out.println(authorization);
+        UsernamePasswordToken usernamePasswordToken = new UsernamePasswordToken(username, password);
         Subject subject = SecurityUtils.getSubject();
         try {
             subject.login(usernamePasswordToken);
             User user = (User) subject.getPrincipal();
 
-            session.setAttribute("user",user);
             model.addAttribute("user",user);
             return "index";
 
@@ -87,7 +83,7 @@ public class LoginRegisterController {
      * @param model
      * @return
      */
-    @RequestMapping("/logout")
+    @GetMapping("/logout")
     public String logout( Model model) {
         Subject subject = SecurityUtils.getSubject();
         subject.logout();
@@ -100,7 +96,7 @@ public class LoginRegisterController {
      * @param model
      * @return
      */
-    @RequestMapping("/unauthorized")
+    @GetMapping("/unauthorized")
     public String unauthorized(Model model) {
         System.out.println("invoke unauthorized!");
         return "unauthorized";

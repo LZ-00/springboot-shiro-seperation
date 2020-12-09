@@ -1,15 +1,11 @@
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org"
-      xmlns:sec="http://www.thymeleaf.org/thymeleaf-extras-springsecurity3"
       xmlns:shiro="http://www.pollix.at/thymeleaf/shiro">
 <head>
     <meta charset="UTF-8" />
     <title>Insert title here</title>
 </head>
 <body>
-<h2>当前在线人数</h2>
-<h2 th:text="${onlineCount}"></h2>
-
 <h1 th:text="'欢迎' + ${user.username } + '光临!请选择你的操作'"></h1><br/>
 <ul>
     <h1 th:if="${msg != null }" th:text="${msg}" style="color: red"></h1>

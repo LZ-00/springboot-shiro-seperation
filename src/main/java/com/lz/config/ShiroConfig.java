@@ -4,16 +4,13 @@ import at.pollux.thymeleaf.shiro.dialect.ShiroDialect;
 import com.lz.component.RetryLimitHashedCredentialsMatcher;
 import com.lz.component.ShiroSessionFactory;
 import com.lz.component.ShiroSessionManager;
-import com.lz.filter.JwtFilter;
 import com.lz.filter.KickoutSessionControlFilter;
 import com.lz.listener.ShiroSessionListener;
-import com.lz.realm.JwtRealm;
+import com.lz.realm.ShiroRealm;
 import com.lz.redis.RedisCacheManager;
 import com.lz.redis.RedisManager;
 import com.lz.redis.RedisSessionDAO;
 import org.apache.shiro.codec.Base64;
-import org.apache.shiro.mgt.DefaultSessionStorageEvaluator;
-import org.apache.shiro.mgt.DefaultSubjectDAO;
 import org.apache.shiro.session.SessionListener;
 import org.apache.shiro.session.mgt.SessionManager;
 import org.apache.shiro.session.mgt.eis.JavaUuidSessionIdGenerator;
@@ -26,10 +23,8 @@ import org.apache.shiro.web.filter.authc.FormAuthenticationFilter;
 import org.apache.shiro.web.mgt.CookieRememberMeManager;
 import org.apache.shiro.web.mgt.DefaultWebSecurityManager;
 import org.apache.shiro.web.servlet.SimpleCookie;
-/*import org.crazycake.shiro.RedisCacheManager;
-import org.crazycake.shiro.RedisManager;
-import org.crazycake.shiro.RedisSessionDAO;*/
 import org.springframework.aop.framework.autoproxy.DefaultAdvisorAutoProxyCreator;
+import org.springframework.beans.factory.config.MethodInvokingFactoryBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.handler.SimpleMappingExceptionResolver;
@@ -54,7 +49,7 @@ public class ShiroConfig {
         //必须设置 SecurityManager,Shiro的核心安全接口
         bean.setSecurityManager(securityManager);
         //这里的/login是后台的接口名,非页面，如果不设置默认会自动寻找Web工程根目录下的"/login.jsp"页面
-        bean.setLoginUrl("/login");
+        bean.setLoginUrl("/toLogin");
         //这里的/index是后台的接口名,非页面,登录成功后要跳转的链接
         bean.setSuccessUrl("/index");
         //未授权界面,该配置无效，并不会进行页面跳转
@@ -65,8 +60,6 @@ public class ShiroConfig {
         //限制同一帐号同时在线的个数
         filtersMap.put("kickout", kickoutSessionControlFilter());
 
-        //Jwt filter
-        filtersMap.put("jwt",new JwtFilter());
 
         bean.setFilters(filtersMap);
 
@@ -75,7 +68,6 @@ public class ShiroConfig {
         LinkedHashMap<String, String> filterChainDefinitionMap = new LinkedHashMap<>();
         //配置不登录可以访问的资源，anon 表示资源都可以匿名访问
 //        filterChainDefinitionMap.put("/user/unLock", "anon");
-//        filterChainDefinitionMap.put("/**", "jwt");
         filterChainDefinitionMap.put("/login", "anon");
         filterChainDefinitionMap.put("/", "anon");
         filterChainDefinitionMap.put("/css/**", "anon");
@@ -84,11 +76,9 @@ public class ShiroConfig {
         filterChainDefinitionMap.put("/druid/**", "anon");
 
         //放行Swagger接口
-        filterChainDefinitionMap.put("/v2/api-docs", "anon");
-        filterChainDefinitionMap.put("/swagger-resources/configuration/ui", "anon");
-        filterChainDefinitionMap.put("/swagger-resources", "anon");
-        filterChainDefinitionMap.put("/swagger-resources/configuration/security", "anon");
-        filterChainDefinitionMap.put("/swagger-ui/", "anon");
+        filterChainDefinitionMap.put("/swagger**/**", "anon");
+        filterChainDefinitionMap.put("/v3/**", "anon");
+        filterChainDefinitionMap.put("/doc.html", "anon");
         filterChainDefinitionMap.put("/webjars/**", "anon");
         //logout是shiro提供的过滤器
         filterChainDefinitionMap.put("/logout", "logout");
@@ -100,7 +90,7 @@ public class ShiroConfig {
         //其他资源都需要认证  user表示配置记住我或认证通过可以访问的地址
 //        filterChainDefinitionMap.put("/**", "user");
         //如果开启限制同一账号登录,改为 .put("/**", "kickout,user");
-//        filterChainDefinitionMap.put("/**", "kickout,user");
+        filterChainDefinitionMap.put("/**", "kickout,authc");
 
         bean.setFilterChainDefinitionMap(filterChainDefinitionMap);
 
@@ -113,7 +103,7 @@ public class ShiroConfig {
      * @param shiroRealm
      * @return
      */
-   /* @Bean
+    @Bean
     public DefaultWebSecurityManager securityManager(ShiroRealm shiroRealm) {
         DefaultWebSecurityManager securityManager = new DefaultWebSecurityManager();
         //设置自定义realm.
@@ -130,19 +120,6 @@ public class ShiroConfig {
         securityManager.setSessionManager(sessionManager());
 
         return securityManager;
-    } */
-    @Bean
-    public DefaultWebSecurityManager securityManager() {
-        DefaultWebSecurityManager securityManager = new DefaultWebSecurityManager();
-        //设置自定义realm.
-        securityManager.setRealm(myRealm());
-
-        DefaultSubjectDAO subjectDAO = new DefaultSubjectDAO();
-        DefaultSessionStorageEvaluator defaultSessionStorageEvaluator = new DefaultSessionStorageEvaluator();
-        defaultSessionStorageEvaluator.setSessionStorageEnabled(false);
-        subjectDAO.setSessionStorageEvaluator(defaultSessionStorageEvaluator);
-        securityManager.setSubjectDAO(subjectDAO);
-        return securityManager;
     }
 
     /**
@@ -150,27 +127,23 @@ public class ShiroConfig {
      *
      * @return
      */
-//    @Bean
-//    public ShiroRealm shiroRealm() {
-//        ShiroRealm shiroRealm = new ShiroRealm();
-//        shiroRealm.setCachingEnabled(true);
-//
-//        /*//配置认证缓存
-//        shiroRealm.setAuthenticationCachingEnabled(true);
-//        shiroRealm.setAuthenticationCacheName("authenticationCache");*/
-//
-//        //配置授权缓存
-//        shiroRealm.setAuthorizationCachingEnabled(true);
-//        shiroRealm.setAuthorizationCacheName("authorizationCache");
-//
-//        shiroRealm.setCredentialsMatcher(retryLimitHashedCredentialsMatcher());
-//        return shiroRealm;
-//    }
-
     @Bean
-    public JwtRealm myRealm(){
-        return new JwtRealm();
+    public ShiroRealm shiroRealm() {
+        ShiroRealm shiroRealm = new ShiroRealm();
+        shiroRealm.setCachingEnabled(true);
+
+        /*//配置认证缓存
+        shiroRealm.setAuthenticationCachingEnabled(true);
+        shiroRealm.setAuthenticationCacheName("authenticationCache");*/
+
+        //配置授权缓存
+        shiroRealm.setAuthorizationCachingEnabled(true);
+        shiroRealm.setAuthorizationCacheName("authorizationCache");
+
+        shiroRealm.setCredentialsMatcher(retryLimitHashedCredentialsMatcher());
+        return shiroRealm;
     }
+
 
     @Bean
     RetryLimitHashedCredentialsMatcher retryLimitHashedCredentialsMatcher() {
@@ -426,40 +399,14 @@ public class ShiroConfig {
      * Spring静态注入
      *
      * @return
-     *//*
+     */
     @Bean
     public MethodInvokingFactoryBean getMethodInvokingFactoryBean(ShiroRealm shiroRealm) {
         MethodInvokingFactoryBean factoryBean = new MethodInvokingFactoryBean();
         factoryBean.setStaticMethod("org.apache.shiro.SecurityUtils.setSecurityManager");
         factoryBean.setArguments(new Object[]{securityManager(shiroRealm)});
         return factoryBean;
-    }*/
-//******************************ehCache缓存*********************************************
-    /**
-     * shiro缓存管理器;
-     * ehCache缓存
-     * 需要添加到securityManager中
-     * @return
-     */
-    //@Bean
-    /*public EhCacheManager ehCacheManager(){
-        EhCacheManager cacheManager = new EhCacheManager();
-        System.out.println("*********************" + cacheManager);
-        //cacheManager.setCacheManagerConfigFile("classpath:config/ehcache-shiro.xml");
-        return cacheManager;
-    }*/
-    /**
-     * 让某个实例的某个方法的返回值注入为Bean的实例
-     * Spring静态注入
-     * @return
-     */
-    //@Bean
-    /*public MethodInvokingFactoryBean getMethodInvokingFactoryBean(ShiroRealm shiroRealm){
-        MethodInvokingFactoryBean factoryBean = new MethodInvokingFactoryBean();
-        factoryBean.setStaticMethod("org.apache.shiro.SecurityUtils.setSecurityManager");
-        factoryBean.setArguments(new Object[]{securityManager(shiroRealm)});
-        return factoryBean;
-    }*/
+    }
 //********************************thymeleaf添加shiro标签的使用**********************************************
 
     /**
